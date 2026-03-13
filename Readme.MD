@@ -508,7 +508,7 @@ gps-imu-sensor-fusion/
 
 **Step 1 — Read theory first**
 
-Open `Project1_Theory.ipynb` in Colab. No code — only equations, derivations, and explanations for every concept the implementation uses. Reading it means no line of code will be mysterious.
+Open `Theory.ipynb` in Colab. No code — only equations, derivations, and explanations for every concept the implementation uses. Reading it means no line of code will be mysterious.
 
 **Step 2 — Enable GPU**
 
@@ -518,7 +518,7 @@ Runtime  →  Change runtime type  →  T4 GPU  →  Save
 
 **Step 3 — Open implementation notebook**
 
-Open `Project1_Implementation.ipynb`. Each code cell has a markdown cell directly above it explaining what it does, what to look for in the output, and why it matters.
+Open `Implementation.ipynb`. Each code cell has a markdown cell directly above it explaining what it does, what to look for in the output, and why it matters.
 
 **Step 4 — Run cells in order**
 
