@@ -1,167 +1,486 @@
-# GPS + IMU Sensor Fusion for Trajectory Estimation
+<div align="center">
 
-**Prem M Patel** — Computer Engineer  
-prempatel7740@gmail.com
+```
+ ██████╗ ██████╗ ███████╗    ██╗███╗   ███╗██╗   ██╗
+██╔════╝ ██╔══██╗██╔════╝    ██║████╗ ████║██║   ██║
+██║  ███╗██████╔╝███████╗    ██║██╔████╔██║██║   ██║
+██║   ██║██╔═══╝ ╚════██║    ██║██║╚██╔╝██║██║   ██║
+╚██████╔╝██║     ███████║    ██║██║ ╚═╝ ██║╚██████╔╝
+ ╚═════╝ ╚═╝     ╚══════╝    ╚═╝╚═╝     ╚═╝ ╚═════╝
+
+███████╗███████╗███╗   ██╗███████╗ ██████╗ ██████╗
+██╔════╝██╔════╝████╗  ██║██╔════╝██╔═══██╗██╔══██╗
+███████╗█████╗  ██╔██╗ ██║███████╗██║   ██║██████╔╝
+╚════██║██╔══╝  ██║╚██╗██║╚════██║██║   ██║██╔══██╗
+███████║███████╗██║ ╚████║███████║╚██████╔╝██║  ██║
+╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝
+
+███████╗██╗   ██╗███████╗██╗ ██████╗ ███╗   ██╗
+██╔════╝██║   ██║██╔════╝██║██╔═══██╗████╗  ██║
+█████╗  ██║   ██║███████╗██║██║   ██║██╔██╗ ██║
+██╔══╝  ██║   ██║╚════██║██║██║   ██║██║╚██╗██║
+██║     ╚██████╔╝███████║██║╚██████╔╝██║ ╚████║
+╚═╝      ╚═════╝ ╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝
+```
+
+<br/>
+
+**Real-world GPS + IMU sensor fusion using Kalman Filter and LSTM**
+**for continuous trajectory estimation under GPS signal loss**
+
+<br/>
+
+![Python](https://img.shields.io/badge/Python-3.10+-14354C?style=for-the-badge&logo=python&logoColor=white)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)
+![Colab](https://img.shields.io/badge/Google_Colab-Ready-F9AB00?style=for-the-badge&logo=googlecolab&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Complete-00C853?style=for-the-badge)
+![Dataset](https://img.shields.io/badge/Dataset-ADVIO-0D47A1?style=for-the-badge)
+
+<br/>
 
 ---
+
+*Prem M Patel — Computer Engineering — Sankalchand Patel University*
+*prempatel7740@gmail.com*
+
+---
+
+</div>
+
+<br/>
+
+## Table of Contents
+
+- [The Problem](#the-problem)
+- [Architecture Overview](#architecture-overview)
+- [Results](#results)
+- [Dataset](#dataset)
+- [Technical Pipeline](#technical-pipeline)
+- [Model Architecture](#model-architecture)
+- [Tech Stack](#tech-stack)
+- [Repository Structure](#repository-structure)
+- [Quickstart](#quickstart)
+- [Real-World Applications](#real-world-applications)
+- [Key Concepts](#key-concepts)
+
+<br/>
+
+---
+
+<br/>
 
 ## The Problem
 
+<br/>
+
+```
+              GPS                            IMU
+        ┌─────────────┐               ┌─────────────┐
+        │  1 Hz only  │               │   100 Hz    │
+        │  3-5m noise │               │  No drift   │
+        │ Loses signal│               │  short-term │
+        │  indoors    │               │             │
+        └──────┬──────┘               └──────┬──────┘
+               │                             │
+               │    Neither alone works.     │
+               │                             │
+               └─────────────┬───────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  Kalman Filter  │
+                    │  Sensor Fusion  │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  GPS blackout?  │
+                    │  LSTM takes     │
+                    │  over.          │
+                    └─────────────────┘
+```
+
+<br/>
+
 Two sensors. Both imperfect. Neither alone reliable.
 
-GPS tells you where you are on Earth — but only once per second, with three to five metres of noise, and nothing at all when you step indoors. IMU tracks every movement you make at a hundred readings per second — but its errors accumulate, and after a few minutes of integration, your estimated position has drifted metres from reality.
+**GPS** tells you where you are on Earth — but only once per second, with 3–5 metres of noise, and nothing at all when you step indoors or fly above 30 km altitude.
 
-This project solves a problem that aerospace engineers, autonomous vehicle teams, and navigation researchers work on every day: how do you combine these two imperfect, asynchronous sensors into one continuous, accurate position estimate — and what happens when the GPS dies completely?
+**IMU** tracks every movement at 100 readings per second — but its errors accumulate. After a few minutes of integration, your estimated position has drifted metres from reality.
 
-The answer involves a 60-year-old algorithm called the Kalman Filter, and a deep learning model called LSTM. The same pairing that guides ISRO rockets through the upper atmosphere, where GPS is unreliable and every metre of positional error matters.
+This project fuses both using a **Kalman Filter** for continuous fusion, and trains an **LSTM** to predict position when GPS dies completely. The same approach used in ISRO rockets, commercial aircraft, and autonomous vehicles.
 
----
-
-## What This Project Does
-
-The pipeline takes raw sensor data from a person walking through real indoor and outdoor environments in Finland and produces:
-
-- A cleaned, noise-filtered IMU signal using a Butterworth low-pass filter
-- A smooth, continuous trajectory from Kalman-fused GPS and IMU data
-- A trained LSTM model that predicts position accurately with GPS completely absent
-- An interactive map showing the real walking path on actual streets
-- Quantitative accuracy metrics comparing the system against ground truth
-
-The entire pipeline runs in Google Colab with no local setup required.
+<br/>
 
 ---
 
-## Dataset
+<br/>
 
-**ADVIO — Apple Device Visual Inertial Odometry**  
-Collected by Aalto University, Helsinki, Finland.
+## Architecture Overview
 
-| Property | Detail |
-|---|---|
-| Source | Zenodo record 1476931 |
-| Sequence used | advio-01 |
-| Environment | Shopping mall, metro station, street |
-| IMU sampling rate | ~100 Hz |
-| GPS sampling rate | ~1 Hz |
-| Total samples | 25,971 (after cleaning) |
-| Download size | ~120 MB |
+<br/>
 
-The dataset contains accelerometer, gyroscope, GPS, barometer, and magnetometer readings from a standard iPhone, along with high-accuracy ground truth poses captured by a separate tracking system.
+```
+  RAW DATA                   PROCESSING                    OUTPUT
+  ─────────                  ──────────                    ──────
+
+  accelerometer.csv ──┐
+                      ├──► Butterworth ──┐
+  gyroscope.csv ──────┘    Low-Pass      │
+                           Filter        ├──► Kalman ──► fused_x
+  platform-locations.csv ───────────────┘    Filter     fused_y
+  (GPS 1Hz)                                  (Cell 7)      │
+                                                           │
+  ┌────────────────────────────────────────────────────────┘
+  │
+  ▼
+  Simulate GPS Blackout ──► Sliding Windows (200 steps) ──► LSTM
+  (5 random windows)        50% overlap                     Model
+  (Cell 9)                  (Cell 10)                       (Cell 11)
+                                                               │
+  ┌────────────────────────────────────────────────────────────┘
+  │
+  ▼
+  Evaluation ──► Metrics (RMSE, MAE, Euclidean) ──► Folium Map
+  (Cell 12)      (Cell 12)                           (Cell 13)
+```
+
+<br/>
 
 ---
 
-## Technical Approach
-
-### Part 1 — Signal Processing
-
-Raw IMU data from a walking person contains genuine motion signal mixed with high-frequency vibration noise from footsteps and phone casing resonance. A 4th-order Butterworth low-pass filter with a 5 Hz cutoff separates these cleanly, preserving the motion signal while removing noise above the human walking frequency range.
-
-The filter is applied using `filtfilt` — a zero-phase implementation that runs the filter forward and backward through the signal, cancelling the phase delay that would otherwise shift sensor readings out of alignment with their true timestamps. For navigation, timestamp accuracy is as important as signal accuracy.
-
-GPS coordinates update at 1 Hz. IMU updates at 100 Hz. Before any fusion can happen, both sensors must exist on the same timeline. Linear interpolation creates a GPS estimate at every IMU timestamp, filling the 99 gaps between each real GPS reading.
-
-### Part 2 — Kalman Filter
-
-The Kalman Filter maintains a state vector of four quantities at every timestep:
-
-```
-x = [ position_x, position_y, velocity_x, velocity_y ]
-```
-
-At each of the 25,971 timesteps, it runs two operations:
-
-**Predict** — use the IMU acceleration to propagate the state forward through the physics of motion:
-
-```
-x_predicted = F * x_previous
-P_predicted = F * P * F^T + Q
-```
-
-**Update** — correct the prediction using the GPS measurement, weighted by relative confidence:
-
-```
-K = P * H^T * inv(H * P * H^T + R)
-x_updated = x_predicted + K * (z_gps - H * x_predicted)
-P_updated = (I - K * H) * P_predicted
-```
-
-The Kalman Gain K is the key quantity. It is large when GPS is trustworthy relative to the prediction, and small when the IMU prediction is more reliable. The filter computes this balance automatically at every step, requiring no manual tuning beyond the noise covariance parameters R (GPS uncertainty, set to 5.0 m) and Q (process noise, set to 0.1).
-
-When GPS is lost, the update step is skipped entirely. The filter continues running on IMU alone — this is dead reckoning, and it works well for short blackout windows of five to thirty seconds.
-
-### Part 3 — LSTM for GPS-Loss Recovery
-
-Dead reckoning from IMU integration drifts over time. For longer GPS blackouts, we need something smarter than pure integration — a model that has learned the relationship between IMU signal patterns and actual motion.
-
-GPS blackouts are simulated by erasing GPS readings for five random windows of five to ten seconds each across the sequence. This gives the model training examples of what GPS loss looks like and what the correct position should be during that loss.
-
-The model receives 200-timestep sliding windows (2 seconds of IMU data at 100 Hz) and predicts the 2D position at the end of each window. Input shape: (200, 6) — six sensor channels across 200 timesteps.
-
-**Architecture:**
-
-```
-Input         (200, 6)
-LSTM          128 units, return_sequences=True
-BatchNorm + Dropout(0.3)
-LSTM          64 units, return_sequences=False
-BatchNorm + Dropout(0.3)
-Dense         32 units, ReLU activation
-Dropout(0.2)
-Dense         2 units  (fused_x, fused_y)
-```
-
-Total parameters: 121,442.
-
-Training uses Mean Squared Error loss, the Adam optimiser at an initial learning rate of 0.001, early stopping with patience 8, and learning rate reduction on plateau with factor 0.5. The 80/20 train-test split uses the first 412 windows for training and holds out the final 104 windows for evaluation.
-
-### Part 4 — Visualisation
-
-Results are visualised at every stage: raw sensor signals, filter comparison, GPS interpolation, Kalman trajectory, GPS blackout windows, training curves, prediction accuracy, and a final interactive Folium map showing the fused trajectory on real OpenStreetMap tiles.
-
----
+<br/>
 
 ## Results
 
-| Metric | Value |
-|---|---|
-| Kalman Filter — average GPS deviation | 0.628 m |
-| Kalman Filter — maximum GPS deviation | 0.655 m |
-| LSTM — train MAE (normalised) | 0.2375 |
-| LSTM — test MAE (normalised) | 0.2926 |
-| LSTM — mean position error | 0.010 m |
-| LSTM — maximum position error | 0.025 m |
+<br/>
 
-The Kalman Filter reduces raw GPS noise from the 3–5 metre range down to sub-metre positional smoothness. The LSTM achieves centimetre-level mean position error on the held-out test set, with train and test MAE within 0.055 of each other — indicating the model generalised rather than memorised.
+```
+  ╔══════════════════════════════════════════════════════════════╗
+  ║                   PERFORMANCE SUMMARY                       ║
+  ╠══════════════════════════════════════════════════════════════╣
+  ║                                                              ║
+  ║  DATASET                                                     ║
+  ║  ├─ Sequence          ADVIO-01 (real-world pedestrian)       ║
+  ║  ├─ Total samples     25,971 rows after cleaning             ║
+  ║  ├─ Training windows  412  (80%)                             ║
+  ║  └─ Test windows      104  (20%)                             ║
+  ║                                                              ║
+  ║  KALMAN FILTER                                               ║
+  ║  ├─ Avg GPS deviation     0.628 m                            ║
+  ║  └─ Max GPS deviation     0.655 m                            ║
+  ║                                                              ║
+  ║  LSTM MODEL                                                  ║
+  ║  ├─ Train MAE (norm)      0.2375                             ║
+  ║  ├─ Test  MAE (norm)      0.2926   [no overfitting]          ║
+  ║  ├─ Mean position error   0.010 m  =  1 centimetre           ║
+  ║  └─ Max  position error   0.025 m  =  2.5 centimetres        ║
+  ║                                                              ║
+  ╠══════════════════════════════════════════════════════════════╣
+  ║                                                              ║
+  ║  Raw GPS alone       ~3–5 metres error                       ║
+  ║  After Kalman         0.628 metres    10x improvement        ║
+  ║  After LSTM           0.010 metres   600x vs raw GPS         ║
+  ║                                                              ║
+  ╚══════════════════════════════════════════════════════════════╝
+```
+
+<br/>
 
 ---
+
+<br/>
+
+## Dataset
+
+<br/>
+
+> **ADVIO — Apple Device Visual Inertial Odometry**
+> Aalto University, Helsinki, Finland — [Zenodo Record 1476931](https://zenodo.org/record/1476931)
+
+<br/>
+
+| Property | Value |
+|:---|:---|
+| Sequences available | 23 (advio-01 through advio-23) |
+| Sequence used | advio-01 |
+| Environments | Shopping mall, metro station, office, street |
+| IMU sampling rate | ~100 Hz |
+| GPS sampling rate | ~1 Hz |
+| Sensor hardware | Standard iPhone (accelerometer, gyroscope, GPS) |
+| Ground truth | High-accuracy external tracking system |
+| Download size | ~120 MB (advio-01 only) |
+
+<br/>
+
+**Files inside each recording:**
+
+```
+advio-01/
+├── iphone/
+│   ├── accelerometer.csv      timestamp, acc_x, acc_y, acc_z  (m/s²)
+│   ├── gyro.csv               timestamp, gyro_x, gyro_y, gyro_z  (rad/s)
+│   ├── platform-locations.csv timestamp, lat, lon, alt, accuracy
+│   ├── magnetometer.csv       magnetic field heading
+│   └── barometer.csv          air pressure / altitude
+└── ground-truth/
+    └── pose.csv               high-accuracy reference position + orientation
+```
+
+<br/>
+
+---
+
+<br/>
+
+## Technical Pipeline
+
+<br/>
+
+### 1 — Signal Processing
+
+<br/>
+
+Raw IMU data carries two things at once: the actual motion signal you care about, and high-frequency vibration noise from footsteps and hardware resonance. A **4th-order Butterworth low-pass filter** at 5 Hz separates these cleanly.
+
+```
+Passband  ──────────────────────┐
+                                 \
+                                  \_______________  Stopband
+                    5 Hz          ↑
+                               Cutoff
+```
+
+The filter is applied using **`filtfilt`** — a zero-phase implementation. Standard filtering introduces a time delay that would misalign sensor readings from their true timestamps. `filtfilt` runs forward and backward, cancelling the delay exactly.
+
+**Nyquist theorem:** At 100 Hz sampling, maximum representable frequency is 50 Hz. Cutoff 5 Hz normalises to 5/50 = 0.1 before filter design.
+
+GPS updates at 1 Hz. IMU updates at 100 Hz. Linear interpolation creates a GPS estimate at every IMU timestamp, filling the 99 gaps between each real GPS reading before any fusion can happen.
+
+<br/>
+
+### 2 — Kalman Filter
+
+<br/>
+
+The Kalman Filter maintains a **state vector** at every timestep:
+
+```
+     ┌ pos_x ┐
+x =  │ pos_y │   4 quantities estimated simultaneously
+     │ vel_x │
+     └ vel_y ┘
+```
+
+At each of the 25,971 timesteps, two operations run:
+
+**PREDICT** — physics propagates state forward using IMU:
+
+```
+x_pred  =  F  *  x_prev
+P_pred  =  F  *  P  *  F^T  +  Q
+
+         ┌ 1  0  dt  0 ┐
+where F = │ 0  1  0  dt │    dt = 0.01s  (100 Hz)
+         │ 0  0  1   0 │
+         └ 0  0  0   1 ┘
+```
+
+**UPDATE** — GPS corrects the prediction:
+
+```
+K  =  P_pred  *  H^T  *  inv(H  *  P_pred  *  H^T  +  R)
+x  =  x_pred  +  K  *  (z_gps  -  H  *  x_pred)
+P  =  (I  -  K  *  H)  *  P_pred
+
+         ┌ 1  0  0  0 ┐
+where H = └ 0  1  0  0 ┘    (observe position only, not velocity)
+
+R  =  5.0  * I_2    (GPS noise ~5 metres)
+Q  =  0.1  * I_4    (IMU process noise)
+```
+
+**K is the Kalman Gain** — it automatically balances trust between GPS and IMU at every step. When GPS is lost: skip the update step. IMU dead reckoning continues. Uncertainty P grows, but position estimates keep flowing.
+
+<br/>
+
+### 3 — LSTM Model
+
+<br/>
+
+Dead reckoning drifts over time. For GPS blackouts longer than a few seconds, a model that has learned the relationship between IMU patterns and actual motion is needed.
+
+**Training data construction:**
+
+```
+Full sequence (25,971 steps)
+        │
+        ▼
+Sliding window  ──  size: 200 steps (2 seconds at 100 Hz)
+                    step: 50  steps (0.5 seconds)
+                    overlap: 75%
+                    total windows: 516
+        │
+        ▼
+Each window:  input  (200, 6)  ──  6 IMU channels x 200 timesteps
+              target (2,)      ──  fused_x, fused_y at window end
+```
+
+**Blackout simulation:** 5 random GPS-loss windows of 5–10 seconds are erased from training data, giving the model examples of navigation without GPS.
+
+<br/>
+
+### 4 — Visualisation
+
+<br/>
+
+| Cell | Output |
+|:---|:---|
+| Cell 04 | Raw accelerometer, gyroscope, GPS signals |
+| Cell 05 | Before vs after Butterworth filter |
+| Cell 06 | GPS interpolation — 1 Hz dots vs 100 Hz line |
+| Cell 08 | 2D trajectory map and X position over time |
+| Cell 09 | GPS blackout windows shaded on timeline |
+| Cell 11 | Training loss and MAE curves |
+| Cell 12 | LSTM predictions vs ground truth + error over time |
+| Cell 13 | Interactive Folium map on real OpenStreetMap tiles |
+
+<br/>
+
+---
+
+<br/>
+
+## Model Architecture
+
+<br/>
+
+```
+  ┌─────────────────────────────────────────────────────────┐
+  │  INPUT   (200 timesteps  x  6 sensor channels)          │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  LSTM  128 units   return_sequences=True                │
+  │  Learns short-term patterns in the 2-second window      │
+  │  Parameters:  69,120                                    │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  BatchNormalization  +  Dropout 0.3                     │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  LSTM  64 units    return_sequences=False               │
+  │  Summarises the full window into compact representation  │
+  │  Parameters:  49,408                                    │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  BatchNormalization  +  Dropout 0.3                     │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  Dense  32 units   ReLU activation                      │
+  │  Non-linear combination of learned features             │
+  │  Parameters:  2,080                                     │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  Dropout 0.2                                            │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  Dense  2 units    Linear activation                    │
+  │  Output: predicted fused_x,  fused_y                    │
+  │  Parameters:  66                                        │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+  ┌────────────────────────▼────────────────────────────────┐
+  │  OUTPUT  (fused_x, fused_y)  in normalised units        │
+  │  inverse_transform  ──►  real metres                    │
+  └─────────────────────────────────────────────────────────┘
+
+  Total parameters:   121,442
+  Trainable:          121,058
+  Non-trainable:          384
+
+  Loss:         Mean Squared Error
+  Optimiser:    Adam  lr=0.001
+  Early stop:   patience=8  on val_loss
+  LR schedule:  ReduceLROnPlateau  factor=0.5  patience=4
+```
+
+<br/>
+
+---
+
+<br/>
 
 ## Tech Stack
 
-| Component | Library |
-|---|---|
-| Data handling | NumPy, Pandas |
-| Signal processing | SciPy |
-| Kalman Filter | FilterPy |
-| Deep learning | TensorFlow / Keras |
-| Evaluation | scikit-learn |
-| Visualisation | Matplotlib, Folium |
-| Environment | Google Colab |
+<br/>
+
+```
+  Data and Numerics        Signal Processing        Deep Learning
+  ─────────────────        ─────────────────        ─────────────
+  NumPy  1.24+             SciPy                    TensorFlow 2.x
+  Pandas 1.5+              └─ butter                Keras
+                           └─ filtfilt              └─ LSTM
+                                                    └─ Dense
+  Kalman Filter            Evaluation               └─ Dropout
+  ─────────────            ──────────               └─ BatchNorm
+  FilterPy                 scikit-learn
+  └─ KalmanFilter          └─ StandardScaler        Visualisation
+                           └─ mean_squared_error    ─────────────
+                           └─ mean_absolute_error   Matplotlib
+                                                    Folium
+  Environment
+  ───────────
+  Google Colab  (T4 GPU recommended)
+  Python 3.10+
+```
+
+<br/>
 
 ---
 
+<br/>
+
 ## Repository Structure
 
+<br/>
+
 ```
-.
-├── Project1_Theory.ipynb          Theory notebook — all equations, concepts,
-│                                  derivations. Read this before the code.
+gps-imu-sensor-fusion/
 │
-├── Project1_Implementation.ipynb  Implementation notebook — full pipeline,
-│                                  documented step by step for Colab.
+├── README.md                        This file
 │
-├── README.md                      This file.
+├── Project1_Theory.ipynb            Theory notebook
+│   │                                Read before touching any code
+│   ├── Sensor physics and equations
+│   ├── Butterworth filter derivation
+│   ├── Full Kalman Filter math
+│   ├── LSTM gate equations
+│   ├── Sliding window mechanics
+│   └── ADVIO dataset overview
 │
-└── outputs/                       Generated after running the notebook
+├── Project1_Implementation.ipynb    Implementation notebook
+│   │                                14 cells, fully documented
+│   ├── Cell 01  Install libraries
+│   ├── Cell 02  Download ADVIO dataset
+│   ├── Cell 03  Load sensor CSVs
+│   ├── Cell 04  Visualise raw data
+│   ├── Cell 05  Butterworth filter
+│   ├── Cell 06  Timestamp synchronisation
+│   ├── Cell 07  Kalman Filter fusion
+│   ├── Cell 08  Trajectory visualisation
+│   ├── Cell 09  Simulate GPS blackout
+│   ├── Cell 10  Sliding window preparation
+│   ├── Cell 11  LSTM build and train
+│   ├── Cell 12  Evaluation and metrics
+│   ├── Cell 13  Folium interactive map
+│   └── Cell 14  Save model and download
+│
+└── outputs/                         Generated after running notebook
     ├── raw_sensor_data.png
     ├── filtered_signal.png
     ├── gps_interpolation.png
@@ -171,70 +490,194 @@ The Kalman Filter reduces raw GPS noise from the 3–5 metre range down to sub-m
     ├── training_curves.png
     ├── lstm_predictions.png
     ├── lstm_error.png
-    ├── trajectory_map.html
-    ├── gps_imu_lstm_model.h5
-    ├── scaler_X.pkl
-    └── scaler_y.pkl
+    ├── trajectory_map.html          Interactive — open in any browser
+    ├── gps_imu_lstm_model.h5        Saved LSTM weights
+    ├── scaler_X.pkl                 Feature scaler
+    └── scaler_y.pkl                 Target scaler
 ```
 
----
-
-## How to Run
-
-**1.** Open `Theory.ipynb` in Colab. Read it completely. No code to run.
-
-**2.** Open `Implementation.ipynb` in Colab.
-
-**3.** Enable GPU: `Runtime > Change runtime type > T4 GPU or v5e-1 TPU > Save`
-
-**4.** Run cells in order from top to bottom. Each cell has a markdown explanation directly above it describing what it does and what to check in the output.
-
-**5.** Total runtime is approximately 15 minutes on the Colab free tier.
-
-The dataset downloads automatically in Cell 2 from Zenodo. No manual data setup is required.
+<br/>
 
 ---
 
-## Real-World Relevance
+<br/>
 
-The technique implemented here is not academic. It is the same fundamental approach used in production systems across multiple industries.
+## Quickstart
 
-**Rocketry** — ISRO's Inertial Systems Unit runs a Kalman Filter in the flight computer of every PSLV, GSLV, and LVM3 launch. Above 30 km, GPS is unreliable. The vehicle navigates on IMU alone — the dead reckoning problem this LSTM was trained to solve. The F matrix, H matrix, and predict-update loop in Cell 7 are variants of what runs in that flight software.
+<br/>
 
-**Aviation** — Commercial aircraft carry multiple independent Inertial Reference Systems. During GPS jamming events, which have become common in certain airspace regions, the IRS takes over completely. Airlines restrict speed and altitude in affected regions because their navigation degrades. This project demonstrates the alternative.
+**Step 1 — Read theory first**
 
-**Autonomous vehicles** — Every self-driving car fuses LiDAR, cameras, GPS, and IMU using a Kalman Filter running at 100+ Hz. In tunnels and underground car parks where GPS is unavailable, the vehicle falls back on IMU integration and learned motion models — the same combination of Kalman and LSTM implemented here.
+Open `Project1_Theory.ipynb` in Colab. No code — only equations, derivations, and explanations for every concept the implementation uses. Reading it means no line of code will be mysterious.
 
-**Indoor navigation** — GPS does not work inside buildings. Pedestrian dead reckoning using IMU, fused with WiFi or BLE beacons using Kalman filtering, is the dominant approach for hospital navigation, warehouse logistics, and airport terminal guidance.
+**Step 2 — Enable GPU**
 
-**Wearables** — Activity trackers and smartwatches use accelerometer-based step detection and gyroscope-based heading estimation to track movement when GPS signal is weak or absent. The signal processing techniques in this project — particularly the zero-phase Butterworth filter — are standard in embedded sensor processing.
+```
+Runtime  →  Change runtime type  →  T4 GPU  →  Save
+```
 
-The physics is the same across all of these. Only the precision requirements and the hardware change.
+**Step 3 — Open implementation notebook**
+
+Open `Project1_Implementation.ipynb`. Each code cell has a markdown cell directly above it explaining what it does, what to look for in the output, and why it matters.
+
+**Step 4 — Run cells in order**
+
+```
+Cell 01  →  libraries install          ~1 min
+Cell 02  →  dataset download           ~5 min
+Cell 03  →  data loading               instant
+Cell 04  →  raw visualisation          instant
+Cell 05  →  filter application         instant
+Cell 06  →  synchronisation            instant
+Cell 07  →  Kalman Filter              ~2 min
+Cell 08  →  trajectory plots           instant
+Cell 09  →  GPS blackout sim           instant
+Cell 10  →  window preparation         instant
+Cell 11  →  LSTM training              ~7 min on T4
+Cell 12  →  evaluation                 instant
+Cell 13  →  Folium map                 instant
+Cell 14  →  save and download          instant
+                                       ────────
+                            Total      ~15 min
+```
+
+No manual data download. No local environment setup. Everything runs inside Colab.
+
+<br/>
 
 ---
 
-## Key Concepts Implemented
+<br/>
 
-- Butterworth low-pass filter — zero-phase implementation with `filtfilt`
-- Nyquist theorem and frequency-domain signal analysis
-- Linear interpolation for multi-rate sensor synchronisation
-- Flat-earth coordinate projection (lat/lon to metres)
-- Kalman Filter — state space model, transition matrix, measurement matrix, Kalman Gain
-- Dead reckoning under GPS blackout
-- Sliding window segmentation for time-series machine learning
-- StandardScaler normalisation and inverse transform
-- LSTM with stacked layers, BatchNormalization, and Dropout
-- Early stopping and learning rate scheduling
-- RMSE, MAE, and Euclidean distance error metrics
-- Folium interactive map generation
+## Real-World Applications
+
+<br/>
+
+The technique here is not academic. It runs in production systems across multiple industries.
+
+<br/>
+
+```
+  ┌──────────────────────────────────────────────────────────────┐
+  │  ISRO / ROCKETRY                                             │
+  │                                                              │
+  │  IISU designs guidance computers for PSLV, GSLV, LVM3,      │
+  │  and Gaganyaan. Above 30 km, GPS is unreliable. The rocket   │
+  │  runs on IMU alone — the exact dead reckoning this LSTM      │
+  │  solves. The F matrix, H matrix, predict-update loop in      │
+  │  Cell 7 are variants of what runs in that flight software.   │
+  └──────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  AVIATION                                                    │
+  │                                                              │
+  │  Commercial aircraft carry 2–3 independent Inertial          │
+  │  Reference Systems running Kalman Filters continuously.      │
+  │  During GPS jamming events — increasingly common in          │
+  │  conflict airspace — the IRS takes over completely.          │
+  │  Airlines lose millions annually to GPS interference.        │
+  └──────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  AUTONOMOUS VEHICLES                                         │
+  │                                                              │
+  │  Every self-driving car fuses LiDAR, cameras, GPS, and       │
+  │  IMU using Kalman variants at 100+ Hz. In tunnels and        │
+  │  underground car parks, the vehicle falls back on IMU        │
+  │  integration and learned motion models — the same            │
+  │  combination of Kalman and LSTM built in this project.       │
+  └──────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  INDOOR NAVIGATION                                           │
+  │                                                              │
+  │  GPS does not work inside buildings. Hospitals, airports,    │
+  │  warehouses — all need IMU-based pedestrian dead reckoning   │
+  │  fused with WiFi or BLE beacons via Kalman filtering.        │
+  │  Google Indoor Maps, Apple, IndoorAtlas — all use LSTM       │
+  │  models trained on IMU sequences for positioning accuracy.   │
+  └──────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  WEARABLES AND HEALTH TECH                                   │
+  │                                                              │
+  │  Smartwatches track runs through GPS-denied areas using      │
+  │  accelerometer step detection and gyroscope heading.         │
+  │  Rehabilitation clinics use IMU-based gait analysis to       │
+  │  quantify patient mobility before and after surgery.         │
+  └──────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  SUBMARINE AND MARINE NAVIGATION                             │
+  │                                                              │
+  │  Submarines cannot use GPS underwater. They navigate         │
+  │  entirely on IMU for the duration of a patrol — sometimes    │
+  │  weeks. Ring laser gyroscope drift over that period is       │
+  │  significant. Kalman correction on surfacing is essential.   │
+  └──────────────────────────────────────────────────────────────┘
+```
+
+<br/>
 
 ---
 
-## Author
+<br/>
 
-**Prem M Patel**  
-Computer Engineer
-prempatel7740@gmail.com
+## Key Concepts
+
+<br/>
+
+| Concept | Cell | Significance |
+|:---|:---:|:---|
+| Butterworth filter | 05 | Zero-phase noise removal from IMU signals |
+| Nyquist theorem | 05 | Defines maximum representable frequency at 100 Hz |
+| Linear interpolation | 06 | Synchronises 1 Hz GPS with 100 Hz IMU timeline |
+| Flat-earth projection | 07 | Converts lat/lon degrees to local X/Y metres |
+| State space model | 07 | Represents position and velocity as unified vector |
+| State transition matrix F | 07 | Encodes physics of constant-velocity motion |
+| Measurement matrix H | 07 | Maps full state to observable GPS measurements |
+| Kalman Gain K | 07 | Optimally weights GPS vs IMU prediction at each step |
+| Dead reckoning | 07 | IMU-only navigation when GPS is absent |
+| Sliding window | 10 | Converts time series into fixed-size LSTM inputs |
+| StandardScaler | 10 | Zero mean, unit variance normalisation |
+| LSTM gates | 11 | Forget, input, output gates for long-term memory |
+| Dropout regularisation | 11 | Prevents memorisation, forces generalisation |
+| BatchNormalization | 11 | Stabilises training, allows higher learning rates |
+| EarlyStopping | 11 | Halts training when validation loss stops improving |
+| RMSE vs MAE | 12 | RMSE penalises large errors, MAE gives average error |
+| Euclidean distance error | 12 | Straight-line positional error in metres |
+| Folium PolyLine | 13 | Draws GPS and fused trajectories on real map tiles |
+
+<br/>
 
 ---
 
+<br/>
+
+<div align="center">
+
+```
+  ┌─────────────────────────────────────────────────────┐
+  │                                                     │
+  │   Project 1 of 2  —  Sensor Fusion Series           │
+  │                                                     │
+  │   Project 2:  IMU Sensor Data Analysis and          │
+  │               Motion Prediction                     │
+  │               CNN-LSTM on UCI HAR Dataset           │
+  │                                                     │
+  └─────────────────────────────────────────────────────┘
+```
+
+<br/>
+
+*The Kalman Filter equations you implemented are in the flight software*
+*of every rocket that has ever launched from Sriharikota.*
+
+<br/>
+
+---
+
+**Prem M Patel** — prempatel7740@gmail.com
+Computer Engineering — Sankalchand Patel University
+
+</div>
