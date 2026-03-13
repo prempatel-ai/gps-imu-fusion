@@ -40,7 +40,7 @@
 
 ---
 
-*Prem M Patel — Computer Engineering — Sankalchand Patel University*
+*Prem M Patel — Computer Engineer*
 *prempatel7740@gmail.com*
 
 ---
@@ -678,6 +678,6 @@ The technique here is not academic. It runs in production systems across multipl
 ---
 
 **Prem M Patel** — prempatel7740@gmail.com
-Computer Engineering — Sankalchand Patel University
+Computer Engineer 
 
 </div>
